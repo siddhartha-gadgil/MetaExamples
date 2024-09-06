@@ -17,3 +17,27 @@ A higly simplified view of a tactic is the following:
 
 #check getGoals -- TacticM (List MVarId)
 #check setGoals -- List MVarId → TacticM Unit
+
+elab "evil" : tactic => do
+  setGoals []
+
+-- example : 1 ≤ 34 := by
+--   evil
+
+#check sorryAx
+
+elab "todo" s:str :tactic =>
+  withMainContext do
+  logInfo m!"Message: {s}"
+  let target ← getMainTarget
+  let sorryExpr ←
+    mkAppM ``sorryAx #[target, mkConst ``false]
+  closeMainGoal `todo sorryExpr
+
+example : 3 ≤ 15 := by
+  todo "Figure out what I should be doing."
+
+example (α : Type) : α  := by
+  revert α
+  intro a
+  todo "Metaprogramming can be hard"
