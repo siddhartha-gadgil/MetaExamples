@@ -1,5 +1,4 @@
 import Lean
-
 open Lean Meta Elab Tactic
 /-!
 ## What is a Tactic?
