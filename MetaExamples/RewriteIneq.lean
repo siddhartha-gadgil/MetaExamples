@@ -99,12 +99,25 @@ example (x y z : Nat) (h₁ : x ≤ y) (h₂ : y ≤ z) : x ≤ y :=
   by
     rw_le h₁
 
-#check MVarId.getType
 
 
-elab "rw_leq" t:term : tactic => do
-  let h ← elabTerm t none
-  liftMetaTactic fun goal =>
+/-
+⊢ (MVarId → MetaM (List MVarId)) → TacticM Unit
+-/
+#check liftMetaTactic
+
+/-
+⊢ MVarId →
+  Expr →
+    optParam ApplyConfig
+        { newGoals := ApplyNewGoals.nonDependentFirst, synthAssignedInstances := true, allowSynthFailures := false,
+          approx := true } →
+      MetaM (List MVarId)
+-/
+#check MVarId.apply
+
+def Lean.MVarId.rewriteLeM (goal: MVarId) (h: Expr) :
+  MetaM <| List MVarId :=
   goal.withContext do
     let hType ← inferType h
     let target ← goal.getType
@@ -135,6 +148,11 @@ elab "rw_leq" t:term : tactic => do
         throwError "Neither ends matched"
     | _, _ =>
       throwError "Did not get inequalities"
+
+
+elab "rw_leq" t:term : tactic => do
+  let h ← elabTerm t none
+  liftMetaTactic fun goal => goal.rewriteLeM h
 
 
 example (x y z : Nat) (h₁ : x ≤ y) (h₂ : y ≤ z) : x ≤ z :=
