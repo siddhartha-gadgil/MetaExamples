@@ -1,6 +1,6 @@
 import Lean
 import MetaExamples.Basic
-open Lean Meta Elab Tactic
+open Lean Meta Elab Tactic Term
 
 /-!
 ## Checking tactics
@@ -16,6 +16,7 @@ def checkTactic (target: Expr)(tac: Syntax):
     try
       let goal ← mkFreshExprMVar target
       let (goals, _) ←
+        withoutErrToSorry do
         Elab.runTactic goal.mvarId! tac
           (← read) (← get)
       return some goals.length
@@ -35,19 +36,21 @@ example : 1 ≤ 5 := by
   check_tactic decide
   decide
 
-syntax (name := check_tactic) "check_tactic?" tacticSeq : tactic
-@[tactic check_tactic] def checkTacticImpl : Tactic := fun stx => do
- match stx with
- | `(tactic| check_tactic? $tac) =>
-  let n? ← checkTactic (← getMainTarget) tac
-  match n? with
-  | some n =>
-    logInfo m!"Tactic succeeded; {n} goals remain"
-    TryThis.addSuggestion stx tac
-  | none =>
-    logWarning m!"Tactic failed"
- | _ => throwUnsupportedSyntax
+syntax (name:= check_tactic) "check_tactic?" tacticSeq : tactic
 
-example : 1 ≤ 5 := by
+@[tactic check_tactic] def checkTacticImpl : Tactic :=
+  fun stx => do
+  match stx with
+  | `(tactic| check_tactic? $tac) =>
+    let n? ← checkTactic (← getMainTarget) tac
+    match n? with
+    | some n =>
+      logInfo m!"Tactic succeeded; {n} goals remain"
+      TryThis.addSuggestion stx tac
+    | none =>
+      logWarning m!"Tactic failed"
+  | _ => throwUnsupportedSyntax
+
+example : 2 ≤ 20 := by
   check_tactic? rfl
-  decide
+  simp
