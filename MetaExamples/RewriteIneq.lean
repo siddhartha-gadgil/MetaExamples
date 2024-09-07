@@ -117,37 +117,37 @@ example (x y z : Nat) (h₁ : x ≤ y) (h₂ : y ≤ z) : x ≤ y :=
 #check MVarId.apply
 
 def Lean.MVarId.rewriteLeM (goal: MVarId) (h: Expr) :
-  MetaM <| List MVarId :=
-  goal.withContext do
-    let hType ← inferType h
-    let target ← goal.getType
-    match ← matchLe hType, ← matchLe target with
-    | some (a, b), some (c, d) =>
-      let firstEq ← isDefEq a c
-      let secondEq ← isDefEq b d
-      if firstEq && secondEq then
-        goal.assign h
-        return []
-      else
-      if firstEq then
-        -- have `a = c`, so `h` is `c ≤ b` and we need `b ≤ d`
-        let newTarget ← mkAppM ``Nat.le #[b, d]
-        let newGoal ← mkFreshExprMVar newTarget
-        let proof ← mkAppM ``Nat.le_trans #[h, newGoal]
-        goal.assign proof
-        return [newGoal.mvarId!]
-      else
-      if secondEq then
-        -- have `b = d`, so `h` is `a ≤ d` and we need `c ≤ a`
-        let newTarget ← mkAppM ``Nat.le #[c, a]
-        let newGoal ← mkFreshExprMVar newTarget
-        let proof ← mkAppM ``Nat.le_trans #[newGoal, h]
-        goal.assign proof
-        return [newGoal.mvarId!]
-      else
-        throwError "Neither ends matched"
-    | _, _ =>
-      throwError "Did not get inequalities"
+    MetaM <| List MVarId :=
+    goal.withContext do
+      let hType ← inferType h
+      let target ← goal.getType
+      match ← matchLe hType, ← matchLe target with
+      | some (a, b), some (c, d) =>
+        let firstEq ← isDefEq a c
+        let secondEq ← isDefEq b d
+        if firstEq && secondEq then
+          goal.assign h
+          return []
+        else
+        if firstEq then
+          -- have `a = c`, so `h` is `c ≤ b` and we need `b ≤ d`
+          let newTarget ← mkAppM ``Nat.le #[b, d]
+          let newGoal ← mkFreshExprMVar newTarget
+          let proof ← mkAppM ``Nat.le_trans #[h, newGoal]
+          goal.assign proof
+          return [newGoal.mvarId!]
+        else
+        if secondEq then
+          -- have `b = d`, so `h` is `a ≤ d` and we need `c ≤ a`
+          let newTarget ← mkAppM ``Nat.le #[c, a]
+          let newGoal ← mkFreshExprMVar newTarget
+          let proof ← mkAppM ``Nat.le_trans #[newGoal, h]
+          goal.assign proof
+          return [newGoal.mvarId!]
+        else
+          throwError "Neither ends matched"
+      | _, _ =>
+        throwError "Did not get inequalities"
 
 
 elab "rw_leq" t:term : tactic => do
@@ -162,7 +162,7 @@ example (x y z : Nat) (h₁ : x ≤ y) (h₂ : y ≤ z) : x ≤ z :=
 
 example (x y z : Nat) (h₁ : x ≤ y) (h₂ : y ≤ z) : x ≤ z :=
   by
-    rw_le h₂
+    rw_leq h₂
     exact h₁
 
 
