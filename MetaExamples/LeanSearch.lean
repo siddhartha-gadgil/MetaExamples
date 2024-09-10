@@ -11,13 +11,6 @@ def getQueryJson (s: String)(num_results : Nat := 12) : IO <| Array Json := do
   let js := Json.parse s |>.toOption |>.get!
   return js.getArr? |>.toOption |>.get!
 
-def getSuggestion (js: Json) : Option TryThis.Suggestion :=
-  match js.getObjValAs? String "formal_name" with
-  | Except.ok name =>
-      let type? := js.getObjValAs? String "formal_type" |>.toOption
-      some {suggestion := name, postInfo? := type?}
-  | _ => none
-
 def getCommandSuggestion (js: Json) : Option TryThis.Suggestion :=
   match js.getObjValAs? String "formal_name" with
   | Except.ok name =>
@@ -33,13 +26,6 @@ def getQueryCommandSuggestions (s: String)(num_results : Nat := 6) :
   IO <| Array TryThis.Suggestion := do
     let jsArr ← getQueryJson s num_results
     return jsArr.filterMap getCommandSuggestion
-
--- #eval getQueryJson "There are infinitely many prime numbers"
-
-#check Nat.exists_prime_gt_modEq_one
-
-#check TryThis.addSuggestions
-#check Json.parse
 
 open Command
 syntax (name := lean_search_cmd) "#lean_search" str : command
