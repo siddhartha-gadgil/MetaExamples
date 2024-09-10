@@ -105,6 +105,19 @@ def defaultTerm (expectedType? : Option Expr) : MetaM Expr := do
       return mkConst ``True.intro
   | none => return mkConst ``True.intro
 
+def checkTactic (target: Expr)(tac: Syntax):
+  TermElabM (Option Nat) :=
+    withoutModifyingState do
+    try
+      let goal ← mkFreshExprMVar target
+      let (goals, _) ←
+        withoutErrToSorry do
+        Elab.runTactic goal.mvarId! tac
+          (← read) (← get)
+      return some goals.length
+    catch _ =>
+      return none
+
 open Command
 syntax (name := lean_search_cmd) "#lean_search" str : command
 @[command_elab lean_search_cmd] def leanSearchImpl : CommandElab :=
@@ -135,13 +148,29 @@ syntax (name := lean_search_term) "lean_search#" str : term
 
 syntax (name := lean_search_tactic) "lean_search?" str : tactic
 @[tactic lean_search_tactic] def leanSearchTacticImpl : Tactic :=
-  fun stx => do
+  fun stx => withMainContext do
   match stx with
   | `(tactic|lean_search? $s) =>
     let s := s.getString
     if s.endsWith "." || s.endsWith "?" then
+      let target ← getMainTarget
       let suggestionGroups ← getQueryTacticSuggestionGroups s
       for (name, sg) in suggestionGroups do
+        let sg ←  sg.filterM fun s =>
+          let sugTxt := s.suggestion
+          match sugTxt with
+          | .string s => do
+            logInfo m!"Checking tactic: {s}"
+            logInfo m!"Target: {← getMainTarget}"
+            let stx? := runParserCategory (← getEnv) `tactic s
+            match stx? with
+            | Except.ok stx =>
+              let n? ← checkTactic target stx
+              return n?.isSome
+            | Except.error e =>
+              logInfo m!"Error: {e} while obtaining syntax tree"
+              pure false
+          | _ => pure false
         TryThis.addSuggestions stx sg (header:= s!"From: {name}")
     else
       logWarning "Lean search query should end with a full stop (period) or a question mark."
@@ -159,7 +188,7 @@ An example of using the leansearch API. The search is triggered when the sentenc
 example := lean_search# "There are infinitely many odd numbers"
 
 example : 3 ≤ 5 := by
-  lean_search? "If a natural number n is less than m, then the successor of n is less than the successor of m"
+  lean_search? "If a natural number n is less than m, then the successor of n is less than the successor of m."
   sorry
 
 open Parser
