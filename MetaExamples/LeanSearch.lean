@@ -64,10 +64,10 @@ def toTermSuggestions (sr: SearchResult) : Array TryThis.Suggestion :=
 
 def toTacticSuggestions (sr: SearchResult) : Array TryThis.Suggestion :=
   match sr.type? with
-  | some type => #[{suggestion := s!"apply {sr.name}", postInfo? := some s!" (type: {type})"},
-        {suggestion := s!"have : {type} := {sr.name}", postInfo? := some s!" (type: {type})"},
-        {suggestion := s!"rw [sr.name]", postInfo? := some s!" (type: {type})"},
-        {suggestion := s!"rw [← sr.name]", postInfo? := some s!" (type: {type})"}]
+  | some type => #[{suggestion := s!"apply {sr.name}"},
+        {suggestion := s!"have : {type} := {sr.name}"},
+        {suggestion := s!"rw [sr.name]"},
+        {suggestion := s!"rw [← sr.name]" }]
   | none => #[]
 
 end SearchResult
@@ -87,10 +87,14 @@ def getQueryTacticSuggestions (s: String)(num_results : Nat := 12) :
     let searchResults ←  SearchResult.query s num_results
     return searchResults.map SearchResult.toTacticSuggestions |>.join
 
-def getQueryTacticSuggestionGroupss (s: String)(num_results : Nat := 12) :
-  IO <| Array <| Array TryThis.Suggestion := do
+def getQueryTacticSuggestionGroups (s: String)(num_results : Nat := 12) :
+  IO <| Array (String ×  Array TryThis.Suggestion) := do
     let searchResults ←  SearchResult.query s num_results
-    return searchResults.map SearchResult.toTacticSuggestions
+    return searchResults.map fun sr =>
+      let fullName := match sr.type? with
+        | some type => s!"{sr.name} (type: {type})"
+        | none => sr.name
+      (fullName, sr.toTacticSuggestions)
 
 def defaultTerm (expectedType? : Option Expr) : MetaM Expr := do
   match expectedType? with
@@ -136,8 +140,9 @@ syntax (name := lean_search_tactic) "lean_search?" str : tactic
   | `(tactic|lean_search? $s) =>
     let s := s.getString
     if s.endsWith "." || s.endsWith "?" then
-      let suggestions ← getQueryTacticSuggestions s
-      TryThis.addSuggestions stx suggestions (header:= "Lean Search Results")
+      let suggestionGroups ← getQueryTacticSuggestionGroups s
+      for (name, sg) in suggestionGroups do
+        TryThis.addSuggestions stx sg (header:= s!"From: {name}")
     else
       logWarning "Lean search query should end with a full stop (period) or a question mark."
   | _ => throwUnsupportedSyntax
@@ -151,11 +156,11 @@ An example of using the leansearch API. The search is triggered when the sentenc
 
 #lean_search "There are infinitely many odd numbers"
 
-example := lean_search# "There are infinitely many odd numbers."
+example := lean_search# "There are infinitely many odd numbers"
 
 example : True := by
   skip
-  lean_search? "There are infinitely many odd numbers."
+  lean_search? "There are infinitely many odd numbers"
   sorry
 
 open Parser
