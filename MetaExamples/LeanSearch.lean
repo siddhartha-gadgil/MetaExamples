@@ -10,29 +10,49 @@ def getQueryJson (s: String)(num_results : Nat := 12) : IO <| Array Json := do
   let js := Json.parse s.stdout |>.toOption |>.get!
   return js.getArr? |>.toOption |>.get!
 
-def getCommandSuggestion (js: Json) : Option TryThis.Suggestion :=
+structure SearchResult where
+  name : String
+  type? : Option String
+  docString? : Option String
+  doc_url? : Option String
+  kind? : Option String
+
+namespace SearchResult
+
+def ofJson? (js: Json) : Option SearchResult :=
   match js.getObjValAs? String "formal_name" with
   | Except.ok name =>
       let type? := js.getObjValAs? String "formal_type" |>.toOption
       let doc? := js.getObjValAs? String "docstring" |>.toOption
       let doc? := doc?.filter fun s => s != ""
-      let data := match doc? with
-        | some doc => s!"· Description: {doc}\n"
-        | none => ""
-      let data := data ++ match type? with
-        | some type => s!"· Type: {type}\n"
-        | none => ""
       let docurl? := js.getObjValAs? String "doc_url" |>.toOption
-      let data := data ++ match docurl? with
-        | some docurl => s!"· URL: {docurl}\n"
-        | none => ""
-      some {suggestion := s!"#check {name}", postInfo? := type?.map fun s => s!" -- {s}" ++ s!"\n{data}"}
+      let kind? := js.getObjValAs? String "kind" |>.toOption
+      some {name := name, type? := type?, docString? := doc?, doc_url? := docurl?, kind? := kind?}
   | _ => none
+
+def query (s: String)(num_results : Nat := 12) :
+    IO <| Array SearchResult := do
+  let jsArr ← getQueryJson s num_results
+  return jsArr.filterMap ofJson?
+
+def toCommandSuggestion (sr : SearchResult) : TryThis.Suggestion :=
+  let data := match sr.docString? with
+    | some doc => s!"· Description: {doc}\n"
+    | none => ""
+  let data := data ++ match sr.type? with
+    | some type => s!"· Type: {type}\n"
+    | none => ""
+  let data := data ++ match sr.doc_url? with
+    | some docurl => s!"· URL: {docurl}\n"
+    | none => ""
+  {suggestion := s!"#check {sr.name}", postInfo? := sr.type?.map fun s => s!" -- {s}" ++ s!"\n{data}"}
+
+end SearchResult
 
 def getQueryCommandSuggestions (s: String)(num_results : Nat := 12) :
   IO <| Array TryThis.Suggestion := do
-    let jsArr ← getQueryJson s num_results
-    return jsArr.filterMap getCommandSuggestion
+    let searchResults ←  SearchResult.query s num_results
+    return searchResults.map SearchResult.toCommandSuggestion
 
 open Command
 syntax (name := lean_search_cmd) "#lean_search" str : command
