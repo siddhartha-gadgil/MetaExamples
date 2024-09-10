@@ -176,7 +176,6 @@ syntax (name := lean_search_tactic) "lean_search?" str : tactic
       logWarning "Lean search query should end with a full stop (period) or a question mark."
   | _ => throwUnsupportedSyntax
 
--- example := lean_search# "There are infinitely many odd numbers."
 /-!
 # Lean Search Examples
 
@@ -188,7 +187,7 @@ An example of using the leansearch API. The search is triggered when the sentenc
 example := lean_search# "There are infinitely many odd numbers"
 
 example : 3 ≤ 5 := by
-  lean_search? "If a natural number n is less than m, then the successor of n is less than the successor of m."
+  lean_search? "If a natural number n is less than m, then the successor of n is less than the successor of m"
   sorry
 
 open Parser
