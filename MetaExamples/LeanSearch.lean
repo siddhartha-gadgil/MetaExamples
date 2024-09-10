@@ -66,8 +66,8 @@ def toTacticSuggestions (sr: SearchResult) : Array TryThis.Suggestion :=
   match sr.type? with
   | some type => #[{suggestion := s!"apply {sr.name}"},
         {suggestion := s!"have : {type} := {sr.name}"},
-        {suggestion := s!"rw [sr.name]"},
-        {suggestion := s!"rw [← sr.name]" }]
+        {suggestion := s!"rw [{sr.name}]"},
+        {suggestion := s!"rw [← {sr.name}]" }]
   | none => #[]
 
 end SearchResult
@@ -158,9 +158,8 @@ An example of using the leansearch API. The search is triggered when the sentenc
 
 example := lean_search# "There are infinitely many odd numbers"
 
-example : True := by
-  skip
-  lean_search? "There are infinitely many odd numbers"
+example : 3 ≤ 5 := by
+  lean_search? "If a natural number n is less than m, then the successor of n is less than the successor of m"
   sorry
 
 open Parser
