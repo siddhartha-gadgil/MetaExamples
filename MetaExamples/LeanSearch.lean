@@ -39,28 +39,12 @@ def toCommandSuggestion (sr : SearchResult) : TryThis.Suggestion :=
   let data := match sr.docString? with
     | some doc => s!"{doc}\n"
     | none => ""
-  -- let data := data ++ match sr.type? with
-  --   | some type => s!"· Type: {type}\n"
-  --   | none => ""
-  -- let data := data ++ match sr.doc_url? with
-  --   | some docurl => s!"· URL: {docurl}\n"
-  --   | none => ""
   {suggestion := s!"#check {sr.name}", postInfo? := sr.type?.map fun s => s!" -- {s}" ++ s!"\n{data}"}
-
-def toTermStx? (sr: SearchResult) : MetaM <| Option Syntax :=
-  sr.type?.bindM fun type => do
-  let term? := runParserCategory (← getEnv) `term type
-  return term?.toOption
 
 def toTermSuggestion (sr: SearchResult) : TryThis.Suggestion :=
   match sr.type? with
   | some type => {suggestion := sr.name, postInfo? := some s!" (type: {type})"}
   | none => {suggestion := sr.name}
-
-def toTermSuggestions (sr: SearchResult) : Array TryThis.Suggestion :=
-  match sr.type? with
-  | some type => #[{suggestion := sr.name, postInfo? := some s!" (type: {type})"}, {suggestion := type, preInfo? := some "Type: "}, {suggestion := s!"({sr.name} : {type})"}]
-  | none => #[{suggestion := sr.name}]
 
 def toTacticSuggestions (sr: SearchResult) : Array TryThis.Suggestion :=
   match sr.type? with
@@ -81,11 +65,6 @@ def getQueryTermSuggestions (s: String)(num_results : Nat := 12) :
   IO <| Array TryThis.Suggestion := do
     let searchResults ←  SearchResult.query s num_results
     return searchResults.map SearchResult.toTermSuggestion
-
-def getQueryTacticSuggestions (s: String)(num_results : Nat := 12) :
-  IO <| Array TryThis.Suggestion := do
-    let searchResults ←  SearchResult.query s num_results
-    return searchResults.map SearchResult.toTacticSuggestions |>.join
 
 def getQueryTacticSuggestionGroups (s: String)(num_results : Nat := 12) :
   IO <| Array (String ×  Array TryThis.Suggestion) := do
