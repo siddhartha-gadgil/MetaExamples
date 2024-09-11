@@ -1,8 +1,9 @@
 import Lean
 import Mathlib
+-- import MetaExamples.Basic -- commented out for single file testing
 open Lean Meta Elab Tactic Parser Term
 
-def getQueryJson (s: String)(num_results : Nat := 12) : IO <| Array Json := do
+def getQueryJson (s: String)(num_results : Nat := 6) : IO <| Array Json := do
   let apiUrl := "https://leansearch.net/api/search"
   let s' := s.replace " " "%20"
   let q := apiUrl++ s!"?query={s'}&num_results={num_results}"
@@ -17,7 +18,14 @@ structure SearchResult where
   doc_url? : Option String
   kind? : Option String
 
+-- def queryNum : CoreM Nat := do
+--   return leansearch.queries.get (← getOptions)
+
+def queryNum : CoreM Nat := do -- fallback for single file testing
+  return 6
+
 namespace SearchResult
+
 
 def ofJson? (js: Json) : Option SearchResult :=
   match js.getObjValAs? String "formal_name" with
@@ -30,7 +38,7 @@ def ofJson? (js: Json) : Option SearchResult :=
       some {name := name, type? := type?, docString? := doc?, doc_url? := docurl?, kind? := kind?}
   | _ => none
 
-def query (s: String)(num_results : Nat := 12) :
+def query (s: String)(num_results : Nat) :
     IO <| Array SearchResult := do
   let jsArr ← getQueryJson s num_results
   return jsArr.filterMap ofJson?
@@ -56,17 +64,17 @@ def toTacticSuggestions (sr: SearchResult) : Array TryThis.Suggestion :=
 
 end SearchResult
 
-def getQueryCommandSuggestions (s: String)(num_results : Nat := 12) :
+def getQueryCommandSuggestions (s: String)(num_results : Nat) :
   IO <| Array TryThis.Suggestion := do
     let searchResults ←  SearchResult.query s num_results
     return searchResults.map SearchResult.toCommandSuggestion
 
-def getQueryTermSuggestions (s: String)(num_results : Nat := 12) :
+def getQueryTermSuggestions (s: String)(num_results : Nat) :
   IO <| Array TryThis.Suggestion := do
     let searchResults ←  SearchResult.query s num_results
     return searchResults.map SearchResult.toTermSuggestion
 
-def getQueryTacticSuggestionGroups (s: String)(num_results : Nat := 12) :
+def getQueryTacticSuggestionGroups (s: String)(num_results : Nat) :
   IO <| Array (String ×  Array TryThis.Suggestion) := do
     let searchResults ←  SearchResult.query s num_results
     return searchResults.map fun sr =>
@@ -98,42 +106,43 @@ def checkTactic (target: Expr)(tac: Syntax):
       return none
 
 open Command
-syntax (name := lean_search_cmd) "#lean_search" str : command
-@[command_elab lean_search_cmd] def leanSearchImpl : CommandElab :=
+syntax (name := leansearch_cmd) "#leansearch" str : command
+@[command_elab leansearch_cmd] def leanSearchImpl : CommandElab :=
   fun stx => Command.liftTermElabM do
   match stx with
-  | `(command| #lean_search $s) =>
+  | `(command| #leansearch $s) =>
     let s := s.getString
     if s.endsWith "." || s.endsWith "?" then
-      let suggestions ← getQueryCommandSuggestions s
+      let suggestions ← getQueryCommandSuggestions s (← queryNum)
       TryThis.addSuggestions stx suggestions (header:= "Lean Search Results")
     else
-      logWarning "Lean search query should end with a full stop (period) or a question mark."
+      logWarning "Lean search query should end with a full stop (period) or a question mark. Note this command sends your query to an external service at https://leansearch.net/."
   | _ => throwUnsupportedSyntax
 
-syntax (name := lean_search_term) "lean_search#" str : term
-@[term_elab lean_search_term] def leanSearchTermImpl : TermElab :=
+syntax (name := leansearch_term) "#leansearch" str : term
+@[term_elab leansearch_term] def leanSearchTermImpl : TermElab :=
   fun stx expectedType? => do
   match stx with
-  | `(lean_search# $s) =>
+  | `(#leansearch $s) =>
     let s := s.getString
     if s.endsWith "." || s.endsWith "?" then
-      let suggestions ← getQueryTermSuggestions s
+      let suggestions ← getQueryTermSuggestions s (← queryNum)
       TryThis.addSuggestions stx suggestions (header:= "Lean Search Results")
     else
-      logWarning "Lean search query should end with a full stop (period) or a question mark."
+      logWarning "Lean search query should end with a full stop (period) or a question mark. Note this command sends your query to an external service at https://leansearch.net/."
     defaultTerm expectedType?
   | _ => throwUnsupportedSyntax
 
-syntax (name := lean_search_tactic) "lean_search?" str : tactic
-@[tactic lean_search_tactic] def leanSearchTacticImpl : Tactic :=
+syntax (name := leansearch_tactic) "#leansearch" str : tactic
+@[tactic leansearch_tactic] def leanSearchTacticImpl : Tactic :=
   fun stx => withMainContext do
   match stx with
-  | `(tactic|lean_search? $s) =>
+  | `(tactic|#leansearch $s) =>
     let s := s.getString
     if s.endsWith "." || s.endsWith "?" then
       let target ← getMainTarget
-      let suggestionGroups ← getQueryTacticSuggestionGroups s
+      let suggestionGroups ←
+          getQueryTacticSuggestionGroups s (← queryNum)
       for (name, sg) in suggestionGroups do
         let sg ←  sg.filterM fun s =>
           let sugTxt := s.suggestion
@@ -152,8 +161,9 @@ syntax (name := lean_search_tactic) "lean_search?" str : tactic
           | _ => pure false
         TryThis.addSuggestions stx sg (header:= s!"From: {name}")
     else
-      logWarning "Lean search query should end with a full stop (period) or a question mark."
+      logWarning "Lean search query should end with a full stop (period) or a question mark. Note this command sends your query to an external service at https://leansearch.net/."
   | _ => throwUnsupportedSyntax
+
 
 /-!
 # Lean Search Examples
@@ -161,12 +171,12 @@ syntax (name := lean_search_tactic) "lean_search?" str : tactic
 An example of using the leansearch API. The search is triggered when the sentence ends with a full stop (period) or a question mark.
 -/
 
-#lean_search "There are infinitely many odd numbers"
+#leansearch "There are infinitely many odd numbers"
 
-example := lean_search# "There are infinitely many odd numbers"
+example := #leansearch "There are infinitely many odd numbers"
 
 example : 3 ≤ 5 := by
-  lean_search? "If a natural number n is less than m, then the successor of n is less than the successor of m"
+  #leansearch "If a natural number n is less than m, then the successor of n is less than the successor of m"
   sorry
 
 open Parser
