@@ -11,12 +11,30 @@ def getQueryJson (s: String)(num_results : Nat := 6) : IO <| Array Json := do
   let js := Json.parse s.stdout |>.toOption |>.get!
   return js.getArr? |>.toOption |>.get!
 
+def getMoogleQueryJson (s : String) (num_results : Nat := 6) : IO <| Array Json := do
+  let apiUrl := "https://www.moogle.ai/api/search"
+  let data := Json.arr
+    #[Json.mkObj [("isFind", false), ("contents", s)]]
+  let s ← IO.Process.output {cmd := "curl", args := #[apiUrl, "-H", "content-type: application/json",  "--data", data.pretty]}
+  match Json.parse s.stdout with
+  | Except.error e =>
+    IO.throwServerError s!"Could not parse JSON from {s.stdout}; error: {e}"
+  | Except.ok js =>
+  let result? := js.getObjValAs?  Json "data"
+  match result? with
+    | Except.ok result =>
+        match result.getArr? with
+        | Except.ok arr => return arr[0:num_results]
+        | Except.error e => IO.throwServerError s!"Could not obtain array from {js}; error: {e}"
+    | _ => IO.throwServerError s!"Could not obtain data from {js}"
+
 structure SearchResult where
   name : String
   type? : Option String
   docString? : Option String
   doc_url? : Option String
   kind? : Option String
+  deriving Repr
 
 -- def queryNum : CoreM Nat := do
 --   return leansearch.queries.get (← getOptions)
@@ -37,6 +55,31 @@ def ofJson? (js: Json) : Option SearchResult :=
       let kind? := js.getObjValAs? String "kind" |>.toOption
       some {name := name, type? := type?, docString? := doc?, doc_url? := docurl?, kind? := kind?}
   | _ => none
+
+def ofMoogleJson? (js : Json) : MetaM <| Option SearchResult :=
+  match js.getObjValAs? String "declarationName" with
+  | Except.ok name => do
+      let type? ←
+        try
+          let info ←  getConstInfo name.toName
+          let fmt ← PrettyPrinter.ppExpr info.type
+          pure <| some fmt.pretty
+        catch _ =>
+          pure none
+      let doc? := js.getObjValAs? String "declarationDocString" |>.toOption
+      let doc? := doc?.filter fun s => s != ""
+      let docurl? := none
+      let kind? := js.getObjValAs? String "declarationType" |>.toOption
+      return some {name := name, type? := type?, docString? := doc?, doc_url? := docurl?, kind? := kind?}
+  | _ => return none
+
+def queryMoogle (s : String) (num_results : Nat) :
+    MetaM <| Array SearchResult := do
+  let jsArr ← getMoogleQueryJson s num_results
+  jsArr.filterMapM ofMoogleJson?
+
+#eval queryMoogle "There are infinitely many primes" 12
+
 
 def query (s: String)(num_results : Nat) :
     IO <| Array SearchResult := do
@@ -77,6 +120,25 @@ def getQueryTermSuggestions (s: String)(num_results : Nat) :
 def getQueryTacticSuggestionGroups (s: String)(num_results : Nat) :
   IO <| Array (String ×  Array TryThis.Suggestion) := do
     let searchResults ←  SearchResult.query s num_results
+    return searchResults.map fun sr =>
+      let fullName := match sr.type? with
+        | some type => s!"{sr.name} (type: {type})"
+        | none => sr.name
+      (fullName, sr.toTacticSuggestions)
+
+def getMoogleQueryCommandSuggestions (s: String)(num_results : Nat) :
+  MetaM <| Array TryThis.Suggestion := do
+    let searchResults ←  SearchResult.queryMoogle s num_results
+    return searchResults.map SearchResult.toCommandSuggestion
+
+def getMoogleQueryTermSuggestions (s: String)(num_results : Nat) :
+  MetaM <| Array TryThis.Suggestion := do
+    let searchResults ←  SearchResult.queryMoogle s num_results
+    return searchResults.map SearchResult.toTermSuggestion
+
+def getMoogleQueryTacticSuggestionGroups (s: String)(num_results : Nat) :
+  MetaM <| Array (String ×  Array TryThis.Suggestion) := do
+    let searchResults ←  SearchResult.queryMoogle s num_results
     return searchResults.map fun sr =>
       let fullName := match sr.type? with
         | some type => s!"{sr.name} (type: {type})"
@@ -148,15 +210,12 @@ syntax (name := leansearch_tactic) "#leansearch" str : tactic
           let sugTxt := s.suggestion
           match sugTxt with
           | .string s => do
-            logInfo m!"Checking tactic: {s}"
-            logInfo m!"Target: {← getMainTarget}"
             let stx? := runParserCategory (← getEnv) `tactic s
             match stx? with
             | Except.ok stx =>
               let n? ← checkTactic target stx
               return n?.isSome
             | Except.error e =>
-              logInfo m!"Error: {e} while obtaining syntax tree"
               pure false
           | _ => pure false
         TryThis.addSuggestions stx sg (header:= s!"From: {name}")
