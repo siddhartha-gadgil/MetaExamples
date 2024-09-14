@@ -5,7 +5,7 @@ open Batteries State
 /-!
 ## The `FibM` State Monad
 -/
-abbrev FibM := State (HashMap Nat Nat)
+abbrev FibM := StateM (HashMap Nat Nat)
 /-!
 * We have a background state that is a `HashMap Nat Nat`, to store values already computed.
 * When computing a term of type `FibM α` we can `get` and use the state and also `set` or `update` it.
@@ -26,7 +26,8 @@ def fibM (n: Nat) : FibM Nat := do
       let f₁ ← fibM k
       let f₂ ← fibM (k + 1)
       let sum := f₁ + f₂
-      update fun m => m.insert n sum
+      let m ← get
+      set <| m.insert n sum
       return sum
 
-#eval fibM 3245
+#eval fibM 32 |>.run' {}
