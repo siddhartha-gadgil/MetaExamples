@@ -1,11 +1,11 @@
-import Batteries
+import Std
 import MetaExamples.State
-open Batteries State
+open State Std
 
 /-!
 ## The `FibM` State Monad
 -/
-abbrev FibM := State (HashMap Nat Nat)
+abbrev FibM := State (Std.HashMap Nat Nat)
 /-!
 * We have a background state that is a `HashMap Nat Nat`, to store values already computed.
 * When computing a term of type `FibM α` we can `get` and use the state and also `set` or `update` it.
@@ -16,7 +16,7 @@ abbrev FibM := State (HashMap Nat Nat)
 
 def fibM (n: Nat) : FibM Nat := do
   let s ← get
-  match s.find? n with
+  match s.get? n with
   | some y => return y
   | none =>
     match n with

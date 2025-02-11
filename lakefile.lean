@@ -8,7 +8,7 @@ package "MetaExamples" where
   ]
   -- add any additional package configuration options here
 
-require "leanprover-community" / "mathlib"
+require "leanprover-community" / "mathlib" @ "git#v4.16.0"
 
 @[default_target]
 lean_lib «MetaExamples» where
