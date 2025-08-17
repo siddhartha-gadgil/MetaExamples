@@ -14,7 +14,9 @@ set_option pp.mvars.withType true in
 #check nat# (Nat.add _ _)
 #check nat# (Nat.add 1 _)
 #check nat# (Nat.add 1 2)
+#check nat# (Nat.add 1 ?x)
 
+#check nat# (Nat.add (_ : Nat) ?x + (?y: Nat))
 
 elab "type#" t:term : term => do
   let e ← elabType t
@@ -26,6 +28,18 @@ elab "type#" t:term : term => do
     logInfo m!"Hole type: {← ppExpr <| ← inferType mvar}"
   let abs ← abstractMVars e
   return abs.expr
+
+elab "term#" t:term : term => do
+  let e ← elabTerm t none
+  -- logInfo m!"{e}"
+  let mvars ← Term.collectUnassignedMVars e
+  logInfo m!"Holes: {mvars.size}"
+  for mvar in mvars do
+    let mvar ← instantiateMVars mvar
+    logInfo m!"Hole type: {← ppExpr <| ← inferType mvar}"
+  let abs ← abstractMVars e
+  return abs.expr
+
 
 /-
 ⊢ AbstractMVarsResult → MetaM (Array Expr × Array BinderInfo × Expr)
@@ -40,6 +54,13 @@ set_option pp.funBinderTypes true
 #check type# (Vector _ _)
 #check type# (_ × _)
 #check type# (List (List Nat))
+#check type# (List (List _))
+#check type# (∀ (_: Nat), Prime _)
+#check term# (∀(x : Nat), Prime x)
+#check term# (Prime (?x : Nat))
+#check term# (Prime (_ : Nat))
+#check type# ((?a : Nat) = ?a)
+
 
 /-
 Lean.Elab.Term.collectUnassignedMVars (type : Expr) (init : Array Expr := #[])
@@ -131,3 +152,113 @@ elab "use_till" n:num "then" tac:tacticSeq : tactic => withMainContext do
 
 example : ∃ n: Nat, n * n = 49 := by
   use_till 12 then try(rfl)
+
+#check ((`a, 1), (`b, 2), (`x, "hello"))
+
+#check Std.HashMap.ofList
+
+#check mkFreshLevelMVar
+
+def isProd? (e: Expr) : MetaM (Option <| Expr × Expr) := do
+  let u ← mkFreshLevelMVar
+  let v ← mkFreshLevelMVar
+  let u := mkSort <| Level.succ u
+  let v := mkSort <| Level.succ v
+  let α ← mkFreshExprMVar u
+  let β ← mkFreshExprMVar v
+  let x ←  mkFreshExprMVar α
+  let y ←  mkFreshExprMVar β
+  let p ← mkAppM ``Prod.mk #[x, y]
+  if ← isDefEq p e then
+    return some (x, y)
+  return none
+
+partial def readKeyVal (e: Expr)  : MetaM (Option <| Name × Expr) := do
+  match ← isProd? e with
+  | some (kExpr, v) => do
+    let α ← inferType kExpr
+    unless ← isDefEq α (mkConst ``Name) do
+      return none
+    let key ← unsafe evalExpr Name (mkConst ``Name) kExpr
+    return (key, v)
+  | none => do
+    return none
+
+partial def readKVs (e: Expr) : MetaM (Std.HashMap Name Expr) := do
+  match ←  readKeyVal e with
+  | some (key, value) => do
+    let mut result := Std.HashMap.empty
+    result := result.insert key value
+    return result
+  | none => do
+    match ← isProd? e with
+    | some (head, tail) => do
+      match ← readKeyVal head with
+      | some (key, value) => do
+        let mut result ← readKVs tail
+        result := result.insert key value
+        return result
+      | none => do
+        return Std.HashMap.empty
+    | none => do
+      return Std.HashMap.empty
+
+-- from batteries
+def getExplicitArgsFromType : Expr → Array Name → Array Name
+  | .forallE n _ body bi, args =>
+    getExplicitArgsFromType body <| if bi.isExplicit then args.push n else args
+  | _, args => args
+
+def fillFuncArgs (f: Expr) (kwArgs : Std.HashMap Name Expr) : TermElabM Expr := do
+  let mut args : Array Expr := #[]
+  let explNames := getExplicitArgsFromType (← inferType f) #[]
+  for n in explNames do
+    match kwArgs.get? n with
+    | some v => args := args.push v
+    | none => return f
+  Term.synthesizeSyntheticMVarsNoPostponing
+  mkAppM' f args
+
+elab f:term "(**" kw:term ")" : term => do
+  let f ←
+    withoutPostponing do elabTerm f none
+  let kw ←
+    withoutPostponing do elabTerm kw none
+  let kwArgs ← readKVs kw
+  fillFuncArgs f kwArgs
+
+def kwargs := ((`a, 1), (`b, 2), (`x, "hello"))
+
+def f (a b :Nat) := a + b
+#eval f (** ((`a, 1), (`b, 2), (`x, "hello"))) -- 3
+#eval f (** kwargs) -- 3
+
+elab "read_key_val" t:term : term => do
+  let t ←
+    withoutPostponing do
+    elabTerm t none
+  let result ← readKeyVal t
+  match result with
+  | some (key, value) => do
+    logInfo m!"Key: {key}, Value: {value}"
+    return t
+  | none => do
+    logInfo m!"Not a key-value pair"
+    return t
+
+#check read_key_val (`a, (1: Nat))
+
+elab "read_key_vals" t:term : term => do
+  let t ←
+    withoutPostponing do
+    elabTerm t none
+  let result ← readKVs t
+  let l := result.toList
+  for (k, v) in l do
+    logInfo m!"Key: {k}, Value: {v}"
+  return t
+
+#check read_key_vals ((`a, 1), (`b, 2), (`x, "hello"))
+
+
+#check read_key_vals kwargs
