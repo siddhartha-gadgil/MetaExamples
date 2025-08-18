@@ -58,7 +58,7 @@ def fillFuncKWArgs (f: Expr) (kwArgs : Std.HashMap Name Expr) : TermElabM Expr :
   for n in explNames do
     match kwArgs.get? n with
     | some v => args := args.push v
-    | none => return f
+    | none => break
   Term.synthesizeSyntheticMVarsNoPostponing
   mkAppM' f args
 
@@ -107,6 +107,9 @@ def sEg : Nat × Nat := {fst := 1, snd := 2}
 
 #eval f (** kwArgsEg')
 #eval f (** { a := 1, b := 2, c := "hello" }) -- 3
+
+#eval (f (** { a := 1,  x := "hi" })) 2 -- 3
+
 
 -- Older test code
 
