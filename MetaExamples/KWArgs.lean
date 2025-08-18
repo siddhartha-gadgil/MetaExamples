@@ -78,7 +78,7 @@ def f (a b :Nat) := a + b
 
 
 syntax assgn := ident " := " term
-syntax (name:=kwargs) "{{" assgn,* "}}" : term
+syntax (name:=kwargs) "{" assgn,* "}" : term
 
 def kwTerm : TSyntax ``assgn → MacroM Syntax.Term
   | `(assgn| $n:ident := $v:term) => do
@@ -87,9 +87,9 @@ def kwTerm : TSyntax ``assgn → MacroM Syntax.Term
   | _ => throw Lean.Macro.Exception.unsupportedSyntax
 
 macro_rules
-| `({{ $p:assgn }}) =>
+| `({ $p:assgn }) =>
     kwTerm p
-| `({{ $as:assgn,*, $last:assgn }}) => do
+| `({ $as:assgn,*, $last:assgn }) => do
     let head ← kwTerm last
     let tailPairs ← Array.mapM kwTerm as
     let stx ← tailPairs.foldrM (init := head) (fun acc p => `(($acc, $p)))
@@ -97,13 +97,16 @@ macro_rules
 
 #eval f (** kwargsEg) -- 3
 
-def kwArgsEg' := {{ a := 1, b := 2, c := "hello" }}
+def kwArgsEg' := { a := 1, b := 2, c := "hello" }
+
+def sEg : Nat × Nat := {fst := 1, snd := 2}
+#eval sEg -- (1, 2)
 
 #eval kwargsEg
 #eval kwArgsEg'
 
 #eval f (** kwArgsEg')
-#eval f (** {{ a := 1, b := 2, c := "hello" }}) -- 3
+#eval f (** { a := 1, b := 2, c := "hello" }) -- 3
 
 -- Older test code
 
