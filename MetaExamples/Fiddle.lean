@@ -1,5 +1,6 @@
 import Lean
 import Mathlib
+import Std.Internal.Async
 
 open Lean Meta Elab Command Syntax Term Parser
 
@@ -158,3 +159,21 @@ example : ∃ n: Nat, n * n = 49 := by
 #check Std.HashMap.ofList
 
 #check mkFreshLevelMVar
+
+open Std
+
+open Std.Internal.IO.Async
+
+def writeSlow : Async Unit := do
+  IO.sleep 3000
+  IO.FS.writeFile "slow.txt" "This is a slow write operation."
+
+elab "#write_slow" : command =>
+  do
+  let _tsk ← writeSlow.toIO
+  return
+
+#write_slow
+
+#check background
+#check 1
