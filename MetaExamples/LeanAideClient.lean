@@ -14,4 +14,4 @@ instance : Semiring ℤ := inferInstance
 
 #eval KernelM.translateThm "There are infinitely many odd numbers."
 
-#theorem : "There are infinitely many odd numbers." >> translate_theorem
+#theorem : "There are infinitely many odd numbers."
