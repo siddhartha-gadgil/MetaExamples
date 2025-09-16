@@ -177,3 +177,5 @@ elab "#write_slow" : command =>
 
 #check background
 #check 1
+
+#check Lean.CodeAction.CommandCodeAction

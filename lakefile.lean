@@ -10,6 +10,8 @@ package "MetaExamples" where
 
 require "leanprover-community" / "mathlib" @ "git#v4.22.0"
 
+require "leanaidecore" from git "https://github.com/siddhartha-gadgil/LeanAide.git" @ "main" / "LeanAideCore"
+
 @[default_target]
 lean_lib «MetaExamples» where
   -- add any library configuration options here
