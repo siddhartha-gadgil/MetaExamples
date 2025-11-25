@@ -1,0 +1,22 @@
+name = "MetaExamples"
+defaultTargets = ["MetaExamples"]
+
+[leanOptions]
+pp.unicode.fun = true
+
+[[require]]
+name = "mathlib"
+scope = "leanprover-community"
+version = "git#v4.22.0"
+
+[[require]]
+name = "leanaidecore"
+git = "https://github.com/siddhartha-gadgil/LeanAide.git"
+rev = "main"
+subDir = "LeanAideCore"
+
+[[lean_lib]]
+name = "MetaExamples"
+
+[[lean_exe]]
+name = "concegs"
