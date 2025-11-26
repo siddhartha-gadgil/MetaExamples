@@ -1,3 +1,14 @@
+variable {α : Type} {r : α → α → Prop} (x : α)
+
+def inv : Acc r x → ∀y : α, (r y x) → Acc r y
+| .intro _ f => f
+
+/-- info: inv {α : Type} {r : α → α → Prop} (x : α) : Acc r x → ∀ (y : α), r y x → Acc r y -/
+#guard_msgs in
+#check inv
+
+example : a = Acc.intro x (inv x a) := rfl
+
 /-!
 This is a property where we can decide `P n` for each `n`, but we cannot decide
 whether `∀ n, P n` holds or not.
@@ -5,37 +16,75 @@ whether `∀ n, P n` holds or not.
 variable (P : Nat → Prop) [DecidablePred P]
 
 /-!
-The main construction for undecidability of definitional equality:
-* If `∀ n, P n` is true, then `f 0` reduces to `f 1`, `f 2`, ... but not to `()`.
-* If `∃ n, ¬ P n` is true, then `f n` reduces to `()`.
+A first attempt at the main construction for undecidability of definitional equality:
+* If `∀ n, P n` is true, then
+  - `f 0 h₀ = f 0 (Acc.intro 0 (inv 0 h₀))`
+  - `f 2 h₂`, ... but not to `()`, where `h₀` is a (non-existent) proof of `Acc (· > ·) 0`.\
+* The above reduction depends on `h₀ = Acc.intro 0 (inv 0 h₀)`, and similarly for `h₁`, `h₂`, ...
+* If `∃ n, ¬ P n` is true, then `f 0 h₀` reduces to `()`.
 Thus, `f 0` is definitionally equal to `()` if and only if `∃ n, ¬ P n`.
+the definition of `f`.
 -/
-noncomputable def f (n : Nat) :
-    Acc (fun x1 x2 ↦ x1 > x2) n → Unit :=
-  Acc.rec (fun n _ h ↦ if (P n) then h (n + 1) (Nat.le_refl (n + 1)) else ())
 
--- Experimenmts with `Acc` and `inv`
+/--
+info: Acc.rec : ((x : Nat) → (∀ (y : Nat), y > x → Acc (fun x1 x2 ↦ x1 > x2) y) → ((y : Nat) → y > x → Unit) → Unit) →
+  {a : Nat} → Acc (fun x1 x2 ↦ x1 > x2) a → Unit
+-/
+#guard_msgs in
+#check Acc.rec (α := Nat) (r := (· > ·)) (motive := fun _  _ => Unit)
+
+noncomputable def f (n : Nat)  :
+    Acc (· > ·) n → Unit :=
+  Acc.rec (fun n _ g ↦ if (P n) then g (n + 1) (Nat.le_refl (n + 1)) else ())
 
 /-- info: f (P : Nat → Prop) [DecidablePred P] (n : Nat) : Acc (fun x1 x2 ↦ x1 > x2) n → Unit -/
 #guard_msgs in
 #check f
 
-variable {α : Type} {r : α → α → Prop} (x : α)
+def p (n : Nat) : n + 1 > n := Nat.le_refl (n + 1)
 
-def inv : Acc r x → ∀y: α, (r y x) → Acc r y
-| .intro _ f => f
+example (n: Nat)
+  (h: ∀ (y : Nat), y > n → Acc (fun x1 x2 ↦ x1 > x2) y) :
+    f P n (Acc.intro n h) =
+      if (P n) then f P (n + 1) (h (n + 1) (p n)) else () := rfl
 
-#check inv
+example (n: Nat) (a: Acc (· > ·) n):
+    f P n (Acc.intro n (inv n a)) =
+      if (P n) then f P (n + 1) (inv n a (n + 1) (p n)) else () := rfl
 
-example : a = Acc.intro x (inv x a) := rfl
+example (n: Nat) (a: Acc (· > ·) n)
+    (_ : P n) :
+    f P n (Acc.intro n (inv n a)) =
+      f P (n + 1) (inv n a (n + 1) (p n)) := rfl
 
-#check DecidablePred
+example (a₀ : Acc (· > ·) 0) (_ : P 0) :
+    f P 0 a₀ =
+      f P 1 (inv 0 a₀ 1 (p 0))  := rfl
+
+example (a₀ : Acc (· > ·) 0)
+    (_ : ¬ P 0) :
+    f P 0 a₀ = () := rfl
+
+example (a₀ : Acc (· > ·) 0)
+    (_ : P 0) (_ : P 1) :
+    f P 0 a₀ =
+      f P 2 (inv 1 (inv 0 a₀ 1 (p 0)) 2 (p 1)) := rfl
+
+example (a₀ : Acc (· > ·) 0)
+    (_ : P 0) (_ : ¬ P 1) :
+    f P 0 a₀ = () := rfl
+
+example (a₀ : Acc (· > ·) 0)
+    (_ : P 0) (_ : P 1) (_ : P 2) :
+    f P 0 a₀ =
+      f P 3 (inv 2 (inv 1 (inv 0 a₀ 1 (p 0)) 2 (p 1)) 3 (p 2)) := rfl
 
 
 
+-- Extra stuff
 partial def f₀ (n: Nat) : Acc (· > ·) n → Unit := fun h ↦
   if (P n) then f₀ (n + 1) (inv n h (n + 1) (by simp)) else ()
 
-#check Acc.rec
-
+/-- info: f₀ (P : Nat → Prop) [DecidablePred P] (n : Nat) : Acc (fun x1 x2 ↦ x1 > x2) n → Unit -/
+#guard_msgs in
 #check f₀
